@@ -4,7 +4,7 @@ import tifffile as tiff
 import numpy as np
 
 
-def segment_images(input_path, output_path, model_dir=None, method="instanseg"):
+def segment_images(input_path, output_path, model_dir=None, method="instanseg", filenames=None, pixel_size=None):
     """
     Performs segmentation on multi-channel TIFF images using InstanSeg.
 
@@ -20,9 +20,9 @@ def segment_images(input_path, output_path, model_dir=None, method="instanseg"):
     os.makedirs(output_path, exist_ok=True)
 
     def list_tiff_files(folder_path):
-        return [f for f in os.listdir(folder_path) if f.endswith('.tiff')]
+        return sorted(f for f in os.listdir(folder_path) if f.lower().endswith(('.tif', '.tiff')))
 
-    img_list = list_tiff_files(input_path)
+    img_list = filenames or list_tiff_files(input_path)
 
     if method == "instanseg":
         from instanseg import InstanSeg
@@ -33,7 +33,10 @@ def segment_images(input_path, output_path, model_dir=None, method="instanseg"):
             image_path = os.path.join(input_path, image)
             print(f"Segmenting: {image}")
 
-            labeled_output = instanseg.eval(image=image_path, save_output=False, save_overlay=False)
+            kwargs = dict(image=image_path, save_output=False, save_overlay=False)
+            if pixel_size is not None:
+                kwargs["pixel_size"] = pixel_size
+            labeled_output = instanseg.eval(**kwargs)
             cell_labels = labeled_output[0, 1].cpu().numpy()  # Validate if this index is still correct
             tiff.imwrite(os.path.join(output_path, image), cell_labels)
 

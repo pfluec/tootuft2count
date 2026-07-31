@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='twotuft2count',
-    version='0.1',
+    name='tootuft2count',
+    version='0.2.0',
     description='A CLI pipeline for combining, segmenting, quantifying, and visualizing multiplexed imaging data.',
     author='Pascal Flüchter',
     author_email='pascal.fluechter@uzh.ch',
@@ -24,7 +24,10 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'twotuft2count=twotuft2count.cli:main',
+            'tootuft2count=tootuft2count.cli:main',
         ],
+    },
+    extras_require={
+        'test': ['pytest>=7,<9', 'pytest-qt>=4,<5'],
     },
 )
