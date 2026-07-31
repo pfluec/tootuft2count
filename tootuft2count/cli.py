@@ -8,10 +8,16 @@ from .visualize import launch_viewer
 import os
 
 @click.group()
-@click.version_option(version='0.1', prog_name='twotuft2count')
+@click.version_option(version='0.2.0', prog_name='tootuft2count')
 def main():
-    """twotuft2count CLI: Process, analyze, and visualize multiplexed imaging data."""
+    """tootuft2count CLI: Process, analyze, and visualize multiplexed imaging data."""
     pass
+
+@main.command()
+def gui():
+    """Launch the napari batch workflow GUI."""
+    from .gui.application import launch_gui
+    launch_gui()
 
 @main.command()
 @click.argument('input_dir')

@@ -8,7 +8,7 @@ from skimage.measure import regionprops_table
 from fcswrite import write_fcs
 
 
-def measure_intensities(image_dir, mask_dir, csv_dir='csv', fcs_dir='fcs', combined_fcs_path='all_images_fcs', panel=None):
+def measure_intensities(image_dir, mask_dir, csv_dir='csv', fcs_dir='fcs', combined_fcs_path='all_images_fcs', panel=None, filenames=None):
     """
     Measures per-cell intensity and morphology features based on segmented masks and multi-channel images.
 
@@ -25,11 +25,13 @@ def measure_intensities(image_dir, mask_dir, csv_dir='csv', fcs_dir='fcs', combi
 
     os.makedirs(csv_dir, exist_ok=True)
     os.makedirs(fcs_dir, exist_ok=True)
-    os.makedirs(os.path.dirname(combined_fcs_path), exist_ok=True)
+    combined_parent = os.path.dirname(combined_fcs_path)
+    if combined_parent:
+        os.makedirs(combined_parent, exist_ok=True)
 
     all_measurements = []
 
-    for fname in os.listdir(image_dir):
+    for fname in filenames or sorted(os.listdir(image_dir)):
         if not fname.endswith(".tiff") and not fname.endswith(".tif"):
             continue
 
@@ -45,7 +47,9 @@ def measure_intensities(image_dir, mask_dir, csv_dir='csv', fcs_dir='fcs', combi
         image = tifffile.imread(image_path)
         mask = tifffile.imread(mask_path).astype(np.int32)
 
-        if image.ndim == 3 and image.shape[0] < 41:
+        if image.ndim == 2:
+            channels = image[np.newaxis, ...]
+        elif image.ndim == 3 and image.shape[0] < 41:
             channels = image
         elif image.ndim == 3 and image.shape[2] < 41:
             channels = np.moveaxis(image, -1, 0)
@@ -75,7 +79,7 @@ def measure_intensities(image_dir, mask_dir, csv_dir='csv', fcs_dir='fcs', combi
         # Intensities
         intensity_data = {}
         for i, ch in enumerate(channels):
-            otsu = threshold_otsu(ch)
+            otsu = threshold_otsu(ch) if np.ptp(ch) else ch.flat[0]
             ch_thresh = np.where(ch >= otsu, ch, 1)
             name = channel_names[i]
             # intensity_data[f"{name}_mean"] = scipy.ndimage.mean(ch_thresh, labels=mask, index=object_ids)

@@ -10,7 +10,9 @@ def quantify_cells(
         results_dir='results',
         panel='panel.csv',
         use_manual_thresholds=False,
-        threshold_source_image=None
+        threshold_source_image=None,
+        filenames=None,
+        populations=None,
 ):
     """
     Quantifies marker-positive cell populations from per-cell measurements.
@@ -56,7 +58,7 @@ def quantify_cells(
             thresholds = json.load(f)
         print(f"Loaded thresholds from {threshold_path}")
 
-    for fname in os.listdir(csv_dir):
+    for fname in filenames or sorted(os.listdir(csv_dir)):
         if not fname.endswith(".csv"):
             continue
 
@@ -120,6 +122,18 @@ def quantify_cells(
                 summary[f"{A}+ of {B}+ (%) (All)"] = 100 * len(AB_pos) / len(B_pos) if len(B_pos) else 0
                 summary[f"{A}+ of {B}+ (%) (DAPI+)"] = 100 * len(AB_pos_dapi) / len(B_pos_dapi) if len(
                     B_pos_dapi) else 0
+
+        if populations:
+            from .populations import evaluate_population
+            effective_thresholds = dict(thresholds)
+            for marker in marker_list:
+                col = f"{marker}_sum"
+                if marker not in effective_thresholds and col in df:
+                    effective_thresholds[marker] = threshold_otsu(df[col].values) if len(df) and df[col].nunique() > 1 else 0
+            for population in populations:
+                selected = evaluate_population(df, population["rule"], effective_thresholds)
+                summary[f"{population['name']} Cells"] = int(selected.sum())
+                summary[f"{population['name']} (%)"] = 100 * selected.mean() if len(df) else 0
 
         summary_df = pd.DataFrame([summary])
         summary_out = os.path.join(results_dir, f"{image_base}_summary.csv")
