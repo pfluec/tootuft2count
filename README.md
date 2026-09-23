@@ -114,13 +114,7 @@ conda create -n tootuft2count python=3.11
 conda activate tootuft2count
 ```
 
-And then install via pip from PyPI:
-
-```bash
-pip install tootuft2count
-```
-
-Or install in editable mode from source:
+Install in editable mode from source:
 
 ```bash
 git clone https://github.com/pfluec/tootuft2count.git
