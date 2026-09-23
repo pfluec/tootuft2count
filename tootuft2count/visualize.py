@@ -4,10 +4,11 @@ import pandas as pd
 import numpy as np
 import tifffile as tf
 from scipy.ndimage import label
-from skimage.filters import threshold_otsu
 import napari
 from magicgui.widgets import VBox, PushButton, CheckBox, FloatSlider
 import glob
+
+from .thresholds import resolve_thresholds, validate_thresholds
 
 
 def launch_viewer(image_path, label_path, csv_path, panel=None, threshold_json_out=None,
@@ -47,7 +48,7 @@ def launch_viewer(image_path, label_path, csv_path, panel=None, threshold_json_o
         if threshold_source_image:
             threshold_path = os.path.join(csv_dir, f"{threshold_source_image}_thresholds.json")
         else:
-            matches = glob.glob(os.path.join(csv_dir, "*_thresholds.json"))
+            matches = sorted(glob.glob(os.path.join(csv_dir, "*_thresholds.json")))
             if not matches:
                 raise FileNotFoundError(
                     f"No *_thresholds.json file found in '{csv_dir}', and no --threshold-source-image was provided."
@@ -58,30 +59,11 @@ def launch_viewer(image_path, label_path, csv_path, panel=None, threshold_json_o
         if not os.path.exists(threshold_path):
             raise FileNotFoundError(f"Threshold file not found at: {threshold_path}")
 
-        with open(threshold_path, "r") as f:
-            thresholds = json.load(f)
+        with open(threshold_path, "r", encoding="utf-8") as f:
+            thresholds = validate_thresholds(json.load(f))
         print(f"Loaded thresholds from {threshold_path}")
 
-    max_area = int(df["area"].max()) if "area" in df.columns else 150
-
-    for marker in marker_list:
-        if marker in thresholds:
-            print(f"Using manual threshold for {marker}: {thresholds[marker]}")
-            continue  # Already loaded from JSON, skip default computation
-
-        col = f"{marker}_sum"
-        if col not in df.columns:
-            thresholds[marker] = 150
-            continue
-
-        if marker == "DAPI":
-            try:
-                thresholds[marker] = int(threshold_otsu(df[col].values) * 0.5)
-            except Exception:
-                thresholds[marker] = int(df[col].median())
-        else:
-            print('Using area as threshold for ' + str(marker))
-            thresholds[marker] = max_area
+    thresholds = resolve_thresholds(df, marker_list, thresholds)
 
     viewer = napari.Viewer()
     viewer.add_image(orig_img, channel_axis=0, name="Original Image")
@@ -110,8 +92,8 @@ def launch_viewer(image_path, label_path, csv_path, panel=None, threshold_json_o
         col = f"{marker}_sum"
         if col not in df.columns:
             continue
-        max_val = int(min(df[col].max(), 2_000_000_000))
-        step_val = max(1, int(max_val // 100_000))
+        max_val = float(min(max(1, df[col].max(), thresholds[marker]), 2_000_000_000))
+        step_val = max(1.0, max_val / 100_000)
         slider = FloatSlider(label=f"{marker} Threshold", min=0, max=max_val, step=step_val, value=thresholds[marker])
         threshold_sliders[marker] = slider
         controls.append(slider)
@@ -171,8 +153,9 @@ def launch_viewer(image_path, label_path, csv_path, panel=None, threshold_json_o
     @save_button.clicked.connect
     def _save():
         if threshold_json_out:
-            with open(threshold_json_out, "w") as f:
-                json.dump({k: int(v) for k, v in thresholds.items()}, f, indent=4)
+            os.makedirs(os.path.dirname(threshold_json_out) or ".", exist_ok=True)
+            with open(threshold_json_out, "w", encoding="utf-8") as f:
+                json.dump({k: float(v) for k, v in thresholds.items()}, f, indent=4)
             print(f"Saved thresholds to {threshold_json_out}")
 
     viewer.window.add_dock_widget(controls, name="Threshold Controls", area="right")

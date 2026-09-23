@@ -48,7 +48,14 @@ class PipelineRunner:
                     sample.status["measure"] = "complete"
                 if "quantify" in stages:
                     self.progress(index, len(selected), sample.name, "quantify", estimate)
-                    quantify_cells(str(root / "csv"), str(root / "results"), str(panel_path), filenames=[f"{sample.name}.csv"], populations=self.project.populations)
+                    thresholds = dict(self.project.shared_thresholds)
+                    thresholds.update(self.project.per_image_thresholds.get(sample.name, {}))
+                    quantify_cells(
+                        str(root / "csv"), str(root / "results"), str(panel_path),
+                        filenames=[f"{sample.name}.csv"],
+                        populations=self.project.populations,
+                        thresholds=thresholds,
+                    )
                     sample.status["quantify"] = "complete"
             except Exception as error:
                 sample.status["error"] = str(error)

@@ -62,6 +62,11 @@ table. Only the selected sample is loaded into napari; the remaining samples
 stay in the persisted project queue. Select no rows to run the entire batch, or
 select rows to process only those samples.
 
+Use **Import shared thresholds** to load a JSON file saved by the threshold
+viewer. Those values are persisted in the project and applied to every sample;
+per-image values in the project override shared values. Markers without an
+explicit value receive an image-specific Otsu threshold.
+
 The workflow saves `tootuft2count_project.json` beside the output directories,
 so completed stages and errors can be reviewed after the application closes.
 Original inputs are never changed. Normalized OME-TIFF images are written to
@@ -150,6 +155,18 @@ The `visualize` command launches a Napari window to:
 - Adjust marker thresholds interactively
 - See point overlays and cell label masks update in real-time
 - Save threshold profiles to reuse across images
+
+All positivity decisions use the per-cell integrated intensity columns
+(`<marker>_sum`). During measurement, pixels below the image-level Otsu
+background threshold contribute zero rather than an area-dependent baseline.
+The output also includes `<marker>_mean` for optional size-normalized analysis,
+but it is not used for default classification. The same cell-level threshold is
+used for visualization, DAPI gating, single-marker counts, double-positive
+counts, and Boolean population rules. Without a saved threshold, it is set by
+Otsu on the per-cell integrated intensities. Result summaries record both the
+effective threshold and whether it was supplied or calculated. Regenerate
+threshold profiles after remeasurement; profiles created from the earlier
+area-baseline measurements are not numerically compatible.
 
 ---
 

@@ -1,5 +1,6 @@
 """Dockable batch workflow UI for napari."""
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -11,6 +12,7 @@ from qtpy.QtWidgets import (QAbstractItemView, QFileDialog, QHBoxLayout, QLabel,
 from ..grouping import discover_groups
 from ..pipeline import PipelineRunner
 from ..project import Project
+from ..thresholds import validate_thresholds
 
 
 class PipelineWorker(QThread):
@@ -40,7 +42,8 @@ class WorkflowWidget(QWidget):
         self.layout().addWidget(self.drop_label)
         buttons = QHBoxLayout()
         self.open_button, self.panel_button = QPushButton("Open directory"), QPushButton("Choose panel")
-        buttons.addWidget(self.open_button); buttons.addWidget(self.panel_button)
+        self.threshold_button = QPushButton("Import shared thresholds")
+        buttons.addWidget(self.open_button); buttons.addWidget(self.panel_button); buttons.addWidget(self.threshold_button)
         self.layout().addLayout(buttons)
         self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(["Sample", "Included markers (comma-separated)", "Pixel override (µm)", "Normalize", "Segment", "Status"])
@@ -55,6 +58,7 @@ class WorkflowWidget(QWidget):
         self.layout().addWidget(self.progress); self.layout().addWidget(self.eta)
         self.open_button.clicked.connect(self.choose_directory)
         self.panel_button.clicked.connect(self.choose_panel)
+        self.threshold_button.clicked.connect(self.choose_thresholds)
         self.run_button.clicked.connect(self.run_pipeline)
         self.cancel_button.clicked.connect(lambda: self.worker and self.worker.cancel())
         self.table.itemSelectionChanged.connect(self.show_selected)
@@ -75,6 +79,26 @@ class WorkflowWidget(QWidget):
     def choose_panel(self):
         path, _ = QFileDialog.getOpenFileName(self, "Choose panel", filter="CSV (*.csv)")
         if path: self.set_panel(path)
+
+    def choose_thresholds(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Choose thresholds", filter="JSON (*.json)")
+        if not path:
+            return
+        if not self.project:
+            QMessageBox.warning(self, "Configuration incomplete", "Choose a TIFF directory first.")
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as stream:
+                self.project.shared_thresholds = validate_thresholds(json.load(stream))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            QMessageBox.warning(self, "Invalid thresholds", str(error))
+            return
+        self.project.save()
+        self.drop_label.setText(
+            "Shared thresholds: " + ", ".join(
+                f"{marker}={value:g}" for marker, value in self.project.shared_thresholds.items()
+            )
+        )
 
     def load_directory(self, path):
         groups = discover_groups(path)
