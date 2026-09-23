@@ -5,7 +5,23 @@ import pandas as pd
 import scipy.ndimage
 from skimage.filters import threshold_otsu
 from skimage.measure import regionprops_table
-from fcswrite import write_fcs
+
+
+def _measure_channel(channel, mask, object_ids, areas):
+    """Return background-suppressed integrated and area-normalized intensity."""
+    otsu = threshold_otsu(channel) if np.ptp(channel) else channel.flat[0]
+    # Suppress image-level background without adding an area-dependent
+    # baseline. The previous value of 1 made a negative cell's sum
+    # approximately equal to its area.
+    foreground = np.where(channel > otsu, channel, 0)
+    integrated = scipy.ndimage.sum_labels(foreground, labels=mask, index=object_ids)
+    normalized = np.divide(
+        integrated,
+        areas,
+        out=np.zeros_like(integrated, dtype=float),
+        where=areas > 0,
+    )
+    return integrated, normalized
 
 
 def measure_intensities(image_dir, mask_dir, csv_dir='csv', fcs_dir='fcs', combined_fcs_path='all_images_fcs', panel=None, filenames=None):
@@ -22,6 +38,8 @@ def measure_intensities(image_dir, mask_dir, csv_dir='csv', fcs_dir='fcs', combi
 
     Note: The panel defines marker names and must match the number of image channels.
     """
+
+    from fcswrite import write_fcs
 
     os.makedirs(csv_dir, exist_ok=True)
     os.makedirs(fcs_dir, exist_ok=True)
@@ -78,13 +96,14 @@ def measure_intensities(image_dir, mask_dir, csv_dir='csv', fcs_dir='fcs', combi
 
         # Intensities
         intensity_data = {}
+        areas = region_df["area"].to_numpy()
         for i, ch in enumerate(channels):
-            otsu = threshold_otsu(ch) if np.ptp(ch) else ch.flat[0]
-            ch_thresh = np.where(ch >= otsu, ch, 1)
             name = channel_names[i]
-            # intensity_data[f"{name}_mean"] = scipy.ndimage.mean(ch_thresh, labels=mask, index=object_ids)
-            intensity_data[f"{name}_sum"] = scipy.ndimage.sum_labels(ch_thresh, labels=mask, index=object_ids)
-            # intensity_data[f"{name}_median"] = scipy.ndimage.median(ch_thresh, labels=mask, index=object_ids)
+            integrated, normalized = _measure_channel(ch, mask, object_ids, areas)
+            intensity_data[f"{name}_sum"] = integrated
+            # Keep a size-normalized diagnostic available without using it as
+            # the default positivity feature.
+            intensity_data[f"{name}_mean"] = normalized
 
         intensity_df = pd.DataFrame(intensity_data, index=object_ids).reset_index().rename(columns={'index': 'Object'})
         full_df = pd.merge(region_df, intensity_df, on='Object', how='inner')
